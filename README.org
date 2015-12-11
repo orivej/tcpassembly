@@ -1,0 +1,5 @@
+[[https://godoc.org/github.com/orivej/tcpassembly/bidistream][tcpassembly/bidistream]] is a library that extends [[https://godoc.org/github.com/google/gopacket/tcpassembly][gopacket/tcpassembly]] with support for
+reassembling of bidirectional streams.
+
+tcpassembly/mysqlsplit is an application that uses bidistream to split
+packet-captured MySQL communications into files with individual requests and responses.

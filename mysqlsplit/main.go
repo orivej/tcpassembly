@@ -9,13 +9,12 @@ import (
 	"path/filepath"
 	"time"
 
-	"orivej/tcpassembly/bidistream"
-
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
 	"github.com/google/gopacket/tcpassembly"
 	"github.com/orivej/e"
+	"github.com/orivej/tcpassembly/bidistream"
 )
 
 var flSaveResponses = flag.Bool("s", false, "save query responses")

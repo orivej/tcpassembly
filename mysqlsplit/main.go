@@ -106,6 +106,7 @@ func main() {
 		ip6     layers.IPv6
 		tcp     layers.TCP
 		payload gopacket.Payload
+		netFlow gopacket.Flow
 	)
 
 	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip4, &ip6, &tcp, &payload)
@@ -129,9 +130,12 @@ func main() {
 
 		for _, typ := range decodedLayers {
 			switch typ {
+			case layers.LayerTypeIPv4:
+				netFlow = ip4.NetworkFlow()
+			case layers.LayerTypeIPv6:
+				netFlow = ip6.NetworkFlow()
 			case layers.LayerTypeTCP:
-				flow := tcp.TransportFlow()
-				assembler.AssembleWithTimestamp(flow, &tcp, ci.Timestamp)
+				assembler.AssembleWithTimestamp(netFlow, &tcp, ci.Timestamp)
 			}
 		}
 	}

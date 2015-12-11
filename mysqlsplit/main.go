@@ -38,14 +38,17 @@ type splitStream struct {
 func (s *splitStream) ReassemblyComplete() {}
 
 func (s *splitStream) Reassembled(index uint8, rs []tcpassembly.Reassembly) {
+	// tcpassembly batching without MaxBufferedPages = 1 may reorder client
+	// and server streams.
+	if s.firstSeen.IsZero() || s.firstSeen.After(rs[0].Seen) {
+		s.firstSeen = rs[0].Seen
+	}
+
 	if index != s.clientIndex {
 		return
 	}
-	for _, r := range rs {
-		if s.firstSeen.IsZero() {
-			s.firstSeen = r.Seen
-		}
 
+	for _, r := range rs {
 		s.data = append(s.data, r.Bytes...)
 
 		for {

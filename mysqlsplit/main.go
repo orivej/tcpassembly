@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"orivej/tcpassembly/bidistream"
@@ -16,6 +17,8 @@ import (
 	"github.com/google/gopacket/tcpassembly"
 	"github.com/orivej/e"
 )
+
+var flSaveResponses = flag.Bool("s", false, "save query responses")
 
 var nextID int
 
@@ -30,51 +33,96 @@ type splitStream struct {
 	flowID      int
 	lastIndex   uint8
 	dirname     string
-	data        []byte
+	data        [2][]byte
+	seen        [2]time.Time
 	nextSize    int
 	firstSeen   time.Time
 }
 
-func (s *splitStream) ReassemblyComplete() {}
+func (s *splitStream) ensureDir() {
+	if len(s.dirname) == 0 {
+		s.dirname = fmt.Sprintf("%08d-%v", s.flowID, s.firstSeen.UnixNano()/1000)
+		err := os.Mkdir(s.dirname, 0777)
+		e.Exit(err)
+	}
+}
+
+func (s *splitStream) write(name string, mtime time.Time, data []byte) {
+	s.ensureDir()
+
+	fname := filepath.Join(s.dirname, name)
+	out, err := os.Create(fname)
+	e.Exit(err)
+	_, err = out.Write(data)
+	e.Exit(err)
+	err = out.Close()
+	e.Exit(err)
+	err = os.Chtimes(fname, mtime, mtime)
+	e.Exit(err)
+}
+
+func (s *splitStream) writeResponses() {
+	index := 1 - s.clientIndex
+	if len(s.data[index]) == 0 {
+		return
+	}
+	ts := s.seen[index]
+	fname := fmt.Sprintf("%vo", ts.UnixNano()/1000)
+	s.write(fname, ts, s.data[index])
+
+	s.data[index] = s.data[index][0:0]
+	s.seen[index] = time.Time{}
+}
 
 func (s *splitStream) Reassembled(index uint8, rs []tcpassembly.Reassembly) {
 	if s.firstSeen.IsZero() {
 		s.firstSeen = rs[0].Seen
 	}
 
-	if index != s.clientIndex {
+	isClient := index == s.clientIndex
+
+	if !isClient && !*flSaveResponses {
 		return
 	}
 
 	for _, r := range rs {
-		s.data = append(s.data, r.Bytes...)
+		s.data[index] = append(s.data[index], r.Bytes...)
+
+		if s.seen[index].IsZero() {
+			s.seen[index] = r.Seen
+		}
+
+		if !isClient {
+			continue
+		}
 
 		for {
-			if s.nextSize == 0 && len(s.data) >= 4 {
-				s.nextSize = int(4 + 0xFFFFFF&binary.LittleEndian.Uint32(s.data))
+			if s.nextSize == 0 && len(s.data[index]) >= 4 {
+				s.nextSize = int(4 + 0xFFFFFF&binary.LittleEndian.Uint32(s.data[index]))
 			}
 
-			if s.nextSize == 0 || len(s.data) < s.nextSize {
+			if s.nextSize == 0 || len(s.data[index]) < s.nextSize {
 				break
 			}
 
-			if s.data[4] == 3 { // Command: Query
-				if len(s.dirname) == 0 {
-					s.dirname = fmt.Sprintf("%08d-%v", s.flowID, s.firstSeen.UnixNano()/1000)
-					err := os.Mkdir(s.dirname, 0777)
-					e.Exit(err)
-				}
-
-				out, err := os.Create(fmt.Sprintf("%v/%v", s.dirname, r.Seen.UnixNano()/1000))
-				e.Exit(err)
-				defer e.CloseOrExit(out)
-				_, err = out.Write(s.data[5:s.nextSize])
-				e.Exit(err)
+			if s.data[index][4] == 3 { // Command: Query
+				fname := fmt.Sprintf("%v", r.Seen.UnixNano()/1000)
+				s.write(fname, r.Seen, s.data[index][5:s.nextSize])
 			}
 
-			s.data = s.data[s.nextSize:]
+			s.data[index] = s.data[index][s.nextSize:]
 			s.nextSize = 0
 		}
+	}
+
+	if isClient && *flSaveResponses {
+		s.writeResponses()
+	}
+}
+
+func (s *splitStream) ReassemblyComplete() {
+	if *flSaveResponses {
+		s.writeResponses()
 	}
 }
 

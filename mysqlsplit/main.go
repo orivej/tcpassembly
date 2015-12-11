@@ -38,9 +38,7 @@ type splitStream struct {
 func (s *splitStream) ReassemblyComplete() {}
 
 func (s *splitStream) Reassembled(index uint8, rs []tcpassembly.Reassembly) {
-	// tcpassembly batching without MaxBufferedPages = 1 may reorder client
-	// and server streams.
-	if s.firstSeen.IsZero() || s.firstSeen.After(rs[0].Seen) {
+	if s.firstSeen.IsZero() {
 		s.firstSeen = rs[0].Seen
 	}
 
@@ -113,6 +111,7 @@ func main() {
 	factory, factoryComplete := bidistream.NewStreamFactory(&splitStreamFactory{})
 	streamPool := tcpassembly.NewStreamPool(factory)
 	assembler := tcpassembly.NewAssembler(streamPool)
+	assembler.AssemblerOptions.MaxBufferedPagesTotal = 1
 
 	decodedLayers := make([]gopacket.LayerType, 0, 10)
 

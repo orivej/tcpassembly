@@ -31,7 +31,6 @@ type key struct {
 
 type myStream struct {
 	index uint8
-	bytes []byte
 	bidi  *bidi
 	done  bool
 }

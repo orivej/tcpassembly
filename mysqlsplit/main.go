@@ -17,7 +17,10 @@ import (
 	"github.com/orivej/tcpassembly/bidistream"
 )
 
-var flSaveResponses = flag.Bool("s", false, "save query responses")
+var (
+	flSaveResponses = flag.Bool("s", false, "save query responses")
+	flFlat          = flag.Bool("flat", false, "do not create subdirectories")
+)
 
 var nextID int
 
@@ -47,10 +50,14 @@ func (s *splitStream) ensureDir() {
 }
 
 func (s *splitStream) write(name string, mtime time.Time, data []byte) {
-	s.ensureDir()
-
-	fname := filepath.Join(s.dirname, name)
-	out, err := os.Create(fname)
+	var fname string
+	if *flFlat {
+		fname = name + intToSortedString(s.flowID)
+	} else {
+		s.ensureDir()
+		fname = filepath.Join(s.dirname, name)
+	}
+	out, err := CreateExclusive(fname)
 	e.Exit(err)
 	_, err = out.Write(data)
 	e.Exit(err)
